@@ -1,6 +1,12 @@
 ﻿#pragma once
 
 #include <d3d11.h>
+#include "detours.h"
+
+//游戏D3D11Present函数定义
+typedef HRESULT(__stdcall *GD3D11Present) (IDXGISwapChain* This, UINT SyncInterval, UINT Flags);
+
+
 
 // CMAINDLG 对话框
 
@@ -24,14 +30,26 @@ protected:
 public:
 	afx_msg void OnBnClickedButton1();
 	afx_msg void OnBnClickedCheck1();
-
+	afx_msg void OnBnClickedCheck2();
+	VOID InitDialog();
 public:
-	//控制台调试信息输出文件句柄
-	FILE *g_Stream;
+
+
+
 	//窗口句柄
 	HWND hWindow;
+
 	//D3D11参数
 	ID3D11Device*  pDevice;
 	ID3D11DeviceContext * pContext;
 	IDXGISwapChain * pSwapChain;
+
+	//获取d3d交换链
+	DWORD_PTR* pDeviceVT;
+	DWORD_PTR* pContextVT;
+	DWORD_PTR* pSwapChainVT;
+
+	
+
+	
 };

@@ -8,7 +8,10 @@
 
 
 
-
+//游戏Present函数地址
+GD3D11Present oPresent = NULL;
+//控制台调试信息输出文件句柄
+FILE *g_Stream = NULL;
 
 
 // CMAINDLG 对话框
@@ -18,6 +21,8 @@ IMPLEMENT_DYNAMIC(CMAINDLG, CDialog)
 CMAINDLG::CMAINDLG(CWnd* pParent /*=nullptr*/)
 	: CDialog(IDD_MAINDLG, pParent)
 {
+
+
 
 }
 
@@ -34,6 +39,7 @@ void CMAINDLG::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CMAINDLG, CDialog)
 	ON_BN_CLICKED(IDC_BUTTON1, &CMAINDLG::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_CHECK1, &CMAINDLG::OnBnClickedCheck1)
+	ON_BN_CLICKED(IDC_CHECK2, &CMAINDLG::OnBnClickedCheck2)
 END_MESSAGE_MAP()
 
 
@@ -53,6 +59,10 @@ void CMAINDLG::OnBnClickedCheck1()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	
+
+	InitDialog();
+
+
 	//判断是否选中；
 	if (BST_CHECKED == ((CButton*)GetDlgItem(IDC_CHECK1))->GetCheck())
 	{
@@ -60,9 +70,35 @@ void CMAINDLG::OnBnClickedCheck1()
 		AllocConsole();
 		freopen_s(&g_Stream,"CON", "w", stdout);
 		SetConsoleTitle(L"调试信息输出");
-		hWindow =::FindWindow(NULL,L"Direct3D窗口");
-		fprintf(g_Stream, "HWND:0x%X\n", (unsigned int)hWindow);
+		hWindow =::FindWindow(NULL,L"Soul at Stake (64-bit, PCD3D_SM5)");
+		fprintf(g_Stream, "HWND:0x%X\n", (UINT)hWindow);
+		fprintf(g_Stream, "pSwapChain:%X\n", (UINT)pSwapChain);
+		fprintf(g_Stream, "pDevice:%X\n", (UINT)pDevice);
+		fprintf(g_Stream, "pContext:%X\n", (UINT)pContext);
+		fprintf(g_Stream, "oPresent:%X\n", (UINT)oPresent);
 
+	}
+		
+	
+	//判断是否未选中。
+	if (BST_UNCHECKED == ((CButton*)GetDlgItem(IDC_CHECK1))->GetCheck())
+	{
+		fclose(g_Stream);
+		FreeConsole();
+
+	}
+
+
+
+}
+
+
+//初始化
+VOID CMAINDLG::InitDialog()
+{
+	
+	if (oPresent == NULL)
+	{
 
 		//交换链
 		DXGI_SWAP_CHAIN_DESC scd;
@@ -100,22 +136,63 @@ void CMAINDLG::OnBnClickedCheck1()
 			&pContext
 		);
 
-		fprintf(g_Stream, "pSwapChain:%X\n", (unsigned int)pSwapChain);
-		fprintf(g_Stream, "pDevice:%X\n", (unsigned int)pDevice);
-		fprintf(g_Stream, "pContext:%X\n", (unsigned int)pContext);
+		//保存值
+		pSwapChainVT = (DWORD_PTR*)pSwapChain;
+		pDeviceVT = (DWORD_PTR*)pDevice;
+		pContextVT = (DWORD_PTR*)pContext;
+		pSwapChainVT = (DWORD_PTR*)(pSwapChainVT[0]);
+		oPresent = (GD3D11Present)pSwapChainVT [8];
 
 
 	}
-		
 	
-	//判断是否未选中。
-	if (BST_UNCHECKED == ((CButton*)GetDlgItem(IDC_CHECK1))->GetCheck())
-	{
-		fclose(g_Stream);
-		FreeConsole();
+}
 
+HRESULT __stdcall HKD3D11Present(IDXGISwapChain * This, UINT SyncInterval, UINT Flags)
+{
+
+	fprintf(g_Stream, "111111111111111111\n");
+
+	return oPresent(This, SyncInterval, Flags);
+}
+
+
+
+void CMAINDLG::OnBnClickedCheck2()
+{
+	// TODO: 在此添加控件通知处理程序代码
+
+
+
+	InitDialog();
+	
+
+		//判断是否选中；
+	if (BST_CHECKED == ((CButton*)GetDlgItem(IDC_CHECK2))->GetCheck())
+	{
+		DetourTransactionBegin();
+		DetourUpdateThread(GetCurrentThread());
+		
+		DetourAttach((PVOID*)&oPresent, (PVOID)HKD3D11Present);
+		
+		DetourTransactionCommit();
 	}
 
+ 
 
+		//判断是否未选中。
+	if (BST_UNCHECKED == ((CButton*)GetDlgItem(IDC_CHECK2))->GetCheck())
 
+	{
+		DetourTransactionBegin();
+		DetourUpdateThread(GetCurrentThread());
+		
+		DetourDetach((PVOID*)&oPresent, (PVOID)HKD3D11Present);
+		
+		DetourTransactionCommit();
+
+	}
 }
+
+
+
