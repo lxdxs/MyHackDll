@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include "detours.h"
 
 //游戏D3D11Present函数定义
@@ -28,37 +29,27 @@ protected:
 	virtual BOOL OnInitDialog();
 	DECLARE_MESSAGE_MAP()
 public:
+	afx_msg void OnBnClickedCancel();
 	afx_msg void OnBnClickedButton1();
 	afx_msg void OnBnClickedCheck1();
 	afx_msg void OnBnClickedCheck2();
-	afx_msg void OnBnClickedCancel();
+	afx_msg void OnBnClickedCheck3();
 public:
-
-
 
 	//窗口句柄
 	HWND hWindow;
 
-
 	//创建D3D交换链
 	DXGI_SWAP_CHAIN_DESC scd;
-
-
-	//D3D11参数
-	IDXGISwapChain * pSwapChain;
-	ID3D11Device*  pDevice;
-	ID3D11DeviceContext * pContext;
-
-
+	
 	//获取d3d交换链值
 	DWORD_PTR* pDeviceVT;
 	DWORD_PTR* pContextVT;
-	DWORD_PTR* pSwapChainVT ;
+	DWORD_PTR* pSwapChainVT;
 
 	//判断是否执行成功
 	HRESULT sz_Info;
 
 	
-
-
+	afx_msg void OnBnClickedCheck4();
 };

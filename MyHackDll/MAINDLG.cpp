@@ -5,16 +5,7 @@
 #include "MyHackDll.h"
 #include "MAINDLG.h"
 #include "afxdialogex.h"
-
-
-
-//游戏Present函数地址
-GD3D11Present oPresent ;
-//游戏DrawIndexed函数地址
-GD3D11DrawIndexed oDrawIndexed ;
-
-//控制台调试信息输出文件句柄
-FILE *g_Stream ;
+#include "Info.h"
 
 
 // CMAINDLG 对话框
@@ -24,9 +15,6 @@ IMPLEMENT_DYNAMIC(CMAINDLG, CDialog)
 CMAINDLG::CMAINDLG(CWnd* pParent /*=nullptr*/)
 	: CDialog(IDD_MAINDLG, pParent)
 {
-
-
-
 }
 
 CMAINDLG::~CMAINDLG()
@@ -44,6 +32,8 @@ BEGIN_MESSAGE_MAP(CMAINDLG, CDialog)
 	ON_BN_CLICKED(IDC_CHECK1, &CMAINDLG::OnBnClickedCheck1)
 	ON_BN_CLICKED(IDC_CHECK2, &CMAINDLG::OnBnClickedCheck2)
 	ON_BN_CLICKED(IDCANCEL, &CMAINDLG::OnBnClickedCancel)
+	ON_BN_CLICKED(IDC_CHECK3, &CMAINDLG::OnBnClickedCheck3)
+	ON_BN_CLICKED(IDC_CHECK4, &CMAINDLG::OnBnClickedCheck4)
 END_MESSAGE_MAP()
 
 
@@ -88,22 +78,6 @@ void CMAINDLG::OnBnClickedCheck1()
 		FreeConsole();
 
 	}
-}
-
-
-HRESULT __stdcall HKD3D11Present(IDXGISwapChain * This, UINT SyncInterval, UINT Flags)
-{
-
-	fprintf(g_Stream, "111111111111111111\n");
-
-	return oPresent(This, SyncInterval, Flags);
-}
-VOID __stdcall HKD3D11DrawIndexed(ID3D11DeviceContext * pContext, UINT IndexCount, UINT StartIndexLocation, INT BaseVertexLocation)
-{
-	fprintf(g_Stream, "22222222222222222222222\n");
-
-
-	oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
 }
 
 //HOOK选项
@@ -210,4 +184,267 @@ BOOL CMAINDLG::OnInitDialog()
 
 	return TRUE;  // return TRUE unless you set the focus to a control
 				  // 异常: OCX 属性页应返回 FALSE
+}
+
+HRESULT GenerateShader(ID3D11Device* pD3DDevice, ID3D11PixelShader** pShader, float r, float g, float b)
+{
+	char szCast[] = "struct VS_OUT"
+		"{"
+		" float4 Position : SV_Position;"
+		" float4 Color : COLOR0;"
+		"};"
+
+		"float4 main( VS_OUT input ) : SV_Target"
+		"{"
+		" float4 fake;"
+		" fake.a = 1.0f;"
+		" fake.r = %f;"
+		" fake.g = %f;"
+		" fake.b = %f;"
+		" return fake;"
+		"}";
+	ID3D10Blob* pBlob;
+	char szPixelShader[1000];
+
+	sprintf_s(szPixelShader,sizeof(szPixelShader), szCast, r, g, b);
+
+	ID3DBlob* d3dErrorMsgBlob;
+
+	HRESULT hr = D3DCompile(szPixelShader, sizeof(szPixelShader), "shader", NULL, NULL, "main", "ps_4_0", NULL, NULL, &pBlob, &d3dErrorMsgBlob);
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = pD3DDevice->CreatePixelShader((DWORD*)pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, pShader);
+
+	if (FAILED(hr))
+		return hr;
+
+	return S_OK;
+}
+
+void SetDepthStencilState(eDepthState aState)
+{
+	pContext->OMSetDepthStencilState(myDepthStencilStates[aState], 1);
+}
+
+HRESULT __stdcall HKD3D11Present(IDXGISwapChain * This, UINT SyncInterval, UINT Flags)
+{
+	if (firstTime)
+	{
+
+		firstTime = FALSE;
+
+		//--------------------------------------------
+		D3D11_DEPTH_STENCIL_DESC  stencilDesc;
+		stencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
+		stencilDesc.StencilEnable = true;
+		stencilDesc.StencilReadMask = 0xFF;
+		stencilDesc.StencilWriteMask = 0xFF;
+		stencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		stencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+		stencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		stencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		stencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		stencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+		stencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		stencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+		//ENABLED
+		stencilDesc.DepthEnable = true;
+		stencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		pDevice->CreateDepthStencilState(&stencilDesc, &myDepthStencilStates[static_cast<int>(eDepthState::ENABLED)]);
+
+		//DISABLED
+		stencilDesc.DepthEnable = false;
+		stencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		pDevice->CreateDepthStencilState(&stencilDesc, &myDepthStencilStates[static_cast<int>(eDepthState::DISABLED)]);
+
+		//NO_READ_NO_WRITE
+		stencilDesc.DepthEnable = false;
+		stencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+		stencilDesc.StencilEnable = false;
+		stencilDesc.StencilReadMask = UINT8(0xFF);
+		stencilDesc.StencilWriteMask = 0x0;
+		pDevice->CreateDepthStencilState(&stencilDesc, &myDepthStencilStates[static_cast<int>(eDepthState::NO_READ_NO_WRITE)]);
+
+		//READ_NO_WRITE
+		stencilDesc.DepthEnable = true;
+		stencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		stencilDesc.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+		stencilDesc.StencilEnable = false;
+		stencilDesc.StencilReadMask = UINT8(0xFF);
+		stencilDesc.StencilWriteMask = 0x0;
+
+		stencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+		stencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
+		stencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+		stencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+
+		stencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_ZERO;
+		stencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_ZERO;
+		stencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_ZERO;
+		stencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_NEVER;
+		pDevice->CreateDepthStencilState(&stencilDesc, &myDepthStencilStates[static_cast<int>(eDepthState::READ_NO_WRITE)]);
+
+		//红色
+		if (!psRed)
+			GenerateShader(pDevice, &psRed, 1.0f, 0.0f, 0.0f);
+
+		//绿色
+		if (!psGreen)
+			GenerateShader(pDevice, &psGreen, 0.0f, 1.0f, 0.0f);
+
+	}
+
+	return oPresent(This, SyncInterval, Flags);
+}
+
+VOID __stdcall HKD3D11DrawIndexed(ID3D11DeviceContext * pContext, UINT IndexCount, UINT StartIndexLocation, INT BaseVertexLocation)
+{
+	
+
+	
+
+
+	if (!psRed || !psGreen || !pContext)
+	{
+		return oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
+	}
+	else
+	{
+
+		//  get stride   get vdesc.ByteWidth
+		pContext->IAGetVertexBuffers(0, 1, &veBuffer, &Stride, &veBufferOffset);
+		if (veBuffer)
+		{
+			veBuffer->GetDesc(&vedesc);
+		}
+		if (veBuffer != NULL) 
+		{ 
+			veBuffer->Release(); 
+			veBuffer = NULL;
+		}
+		else
+		{
+			return oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
+		}
+			
+		//get indesc.ByteWidth
+		pContext->IAGetIndexBuffer(&inBuffer, &inFormat, &inOffset);
+		if (inBuffer)
+		{
+			inBuffer->GetDesc(&indesc);
+		}
+
+		if (inBuffer != NULL) 
+		{ 
+			inBuffer->Release(); 
+			inBuffer = NULL; 
+		}
+		else
+		{
+			return oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
+		}
+
+		//--------测试用-------------
+		if (GetAsyncKeyState('O') & 1) //-
+		{
+			g_iStride = g_iStride - 1;
+		}
+		else if (GetAsyncKeyState('P') & 1) //+
+		{
+			g_iStride = g_iStride + 1;
+		}
+		else if (GetAsyncKeyState('U') & 1) //-
+		{
+			g_inByteWidth = g_inByteWidth - 10;
+		}
+		else if (GetAsyncKeyState('I') & 1) //+
+		{
+			g_inByteWidth = g_inByteWidth + 10;
+		}
+		else if (GetAsyncKeyState('T') & 1) //-
+		{
+			g_veByteWidth = g_veByteWidth - 10;
+		}
+		else if (GetAsyncKeyState('Y') & 1) //+
+		{
+			g_veByteWidth = g_veByteWidth + 10;
+		}
+		else if (GetAsyncKeyState('N') & 1) // == 0
+		{
+			int  g_iStride = 0;
+			int  g_inByteWidth = 0;
+			int  g_veByteWidth = 0;
+			fprintf(g_Stream, "清理数据");
+		}
+		else if (GetAsyncKeyState('M') & 1) // == 0
+		{
+			fprintf(g_Stream,"Stride:%d	vedesc.ByteWidth:%d	indesc.ByteWidth:%d\n", g_iStride, g_veByteWidth, g_inByteWidth);
+		}
+
+		//wallhack
+		if (Player|| (Stride== g_iStride))
+		{
+			if (g_bClose_ZEnable)
+				SetDepthStencilState(DISABLED);
+
+			if (g_bColouring)
+				pContext->PSSetShader(psRed, NULL, NULL);
+
+			if (g_bClose_ZEnable)
+				oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
+
+			if (g_bClose_ZEnable)
+				SetDepthStencilState(ENABLED);
+
+			if (g_bColouring)
+				pContext->PSSetShader(psGreen, NULL, NULL);
+		}
+
+	}
+	return oDrawIndexed(pContext, IndexCount, StartIndexLocation, BaseVertexLocation);
+}
+
+
+void CMAINDLG::OnBnClickedCheck3()
+{
+	// TODO: 在此添加控件通知处理程序代码
+
+	//判断是否选中；
+	if (BST_CHECKED == ((CButton*)GetDlgItem(IDC_CHECK3))->GetCheck())
+	{
+		g_bColouring = TRUE;
+	}
+
+
+
+	//判断是否未选中。
+	if (BST_UNCHECKED == ((CButton*)GetDlgItem(IDC_CHECK3))->GetCheck())
+	{
+		g_bColouring = FALSE;
+	}
+
+}
+
+
+void CMAINDLG::OnBnClickedCheck4()
+{
+	// TODO: 在此添加控件通知处理程序代码
+
+
+		//判断是否选中；
+	if (BST_CHECKED == ((CButton*)GetDlgItem(IDC_CHECK4))->GetCheck())
+	{
+		g_bClose_ZEnable = TRUE;
+	}
+
+
+
+	//判断是否未选中。
+	if (BST_UNCHECKED == ((CButton*)GetDlgItem(IDC_CHECK4))->GetCheck())
+	{
+		g_bClose_ZEnable = FALSE;
+	}
 }

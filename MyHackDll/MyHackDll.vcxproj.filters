@@ -49,6 +49,9 @@
     <ClInclude Include="MAINDLG.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Info.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="MyHackDll.rc">
